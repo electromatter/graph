@@ -263,6 +263,16 @@ class Graph(collections.abc.MutableSet):
 
         return '\n'.join(lines)
 
+    def save_dot(self, file, graph_name=None):
+        do_close = False
+        if isinstance(file, str):
+            file = open(file, 'w')
+            do_close = True
+        file.write(self.render_dot(graph_name).encode('utf8'))
+        file.flush()
+        if do_close:
+            file.close()
+
     def display(self, dot_args=['-Tx11'], dot_exec='dot'):
         dot = subprocess.Popen([dot_exec] + dot_args, stdin=subprocess.PIPE)
         dot.stdin.write(self.render_dot().encode('utf8'))
