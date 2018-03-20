@@ -311,18 +311,10 @@ def erdos_renyi(n, *, m=None, p=0.5, random=_random):
     'Random graph'
     graph = Graph(range(n))
     if m is not None:
-        if m > n * (n - 1) // 2:
-            raise ValueError('Requested number of links exceeds maximum')
-        for _ in range(m):
-            while True:
-                left = random.randrange(0, n)
-                right = random.randrange(0, n)
-                while left == right:
-                    right = random.randrange(0, n)
-                link = Link(left, right)
-                if link not in graph.links:
-                    graph.add_link(link)
-                    break
+        links = [(i, j) for i in range(n) for j in range(n) if i != j]
+        random._shuffle(links)
+        for link in links[:m]:
+            graph.add_link(*link)
     else:
         if p <= 0:
             return graph
