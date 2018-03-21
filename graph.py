@@ -244,6 +244,18 @@ class Graph(collections.abc.MutableSet):
     def node_view(self, node):
         return NodeView(self, node)
 
+    def relabeled(self, mapping):
+        graph = self.__class__()
+        mapping = dict(mapping)
+        labels = set(mapping)
+        if lables != self or labels != set(mapping.values):
+            raise ValueError('expected a one-to-one onto label mapping')
+        for node in self:
+            graph.add(mapping[node])
+        for left, right in self.links:
+            graph.add_link(Link(mapping[left], mapping[right]))
+        return graph
+
     def render_dot(self, graph_name=None):
         lines = []
 
@@ -332,7 +344,9 @@ def erdos_renyi(n, *, m=None, p=0.5, random=_random):
 
 
 def minimum_spanning_subgraph(graph, start):
-    forrest = Graph([start])
+    if start not in graph:
+        return Graph()
+    forrest = Graph((start,))
     seen = set()
     level = None
     next_level = {start}
