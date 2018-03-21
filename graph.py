@@ -252,6 +252,8 @@ class Graph(collections.abc.MutableSet):
         else:
             lines.append('graph %s {' % _dot_escape(graph_name))
 
+        lines.append('    overlap = prism;')
+
         for node in self._nodes:
             lines.append('    %s;' % _dot_node(node))
 
@@ -273,7 +275,7 @@ class Graph(collections.abc.MutableSet):
         if do_close:
             file.close()
 
-    def display(self, dot_args=['-Tx11'], dot_exec='dot'):
+    def display(self, dot_exec='neato', dot_args=['-Tx11']):
         dot = subprocess.Popen([dot_exec] + dot_args, stdin=subprocess.PIPE)
         dot.stdin.write(self.render_dot().encode('utf8'))
         dot.stdin.close()
@@ -312,7 +314,7 @@ def erdos_renyi(n, *, m=None, p=0.5, random=_random):
     graph = Graph(range(n))
     if m is not None:
         links = [(i, j) for i in range(n) for j in range(n) if i != j]
-        random._shuffle(links)
+        _random._shuffle(links, random)
         for link in links[:m]:
             graph.add_link(*link)
     else:
@@ -327,3 +329,21 @@ def erdos_renyi(n, *, m=None, p=0.5, random=_random):
                 if random.random() < p:
                     graph.add_link(Link(left, right))
     return graph
+
+
+def minimum_spanning_subgraph(graph, start):
+    forrest = Graph([start])
+    seen = set()
+    level = None
+    next_level = {start}
+    while next_level:
+        level, next_level = next_level, set()
+        seen |= level
+        for parent in level:
+            for child in graph.neighborhood(parent):
+                if child in seen:
+                    continue
+                forrest.add(child)
+                forrest.add_link(Link(parent, child))
+                next_level.add(child)
+    return forrest
