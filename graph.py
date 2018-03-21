@@ -277,7 +277,7 @@ class Graph(collections.abc.MutableSet):
                 if node in seen:
                     raise ValueError('subgraphs must be disjoint')
                 seen.add(node)
-                lines.append(self._render_node(node))
+                lines.append(self._render_node(node, **kwargs))
             lines.append('}')
 
         for name, nodes in groups.items():
@@ -287,13 +287,13 @@ class Graph(collections.abc.MutableSet):
                 if node in seen:
                     raise ValueError('subgraphs must be disjoint')
                 seen.add(node)
-                lines.append(self._render_node(node))
+                lines.append(self._render_node(node, **kwargs))
             lines.append('}')
 
         for node in self:
             if node in seen:
                 continue
-            lines.append(self._render_node(node))
+            lines.append(self._render_node(node, **kwargs))
 
         return lines
 
@@ -406,3 +406,15 @@ def minimum_spanning_subgraph(graph, start):
                 subgraph.add_link(Link(parent, child))
                 next_level.add(child)
     return subgraph, layers
+
+
+def display_minimum_spanning_subgraph(graph, start, **kwargs):
+    sub, layers = minimum_spanning_subgraph(graph, start)
+    kwargs.setdefault('graphviz_exec', 'dot')
+    kwargs.setdefault('graph_style', {}) \
+          .setdefault('rankdir', 'TB')
+    kwargs.setdefault('node_styles', {}) \
+          .setdefault(start, {}) \
+          .setdefault('color', 'red')
+    print(sub.render_graph(layers=layers, **kwargs))
+    sub.display(layers=layers, **kwargs)
