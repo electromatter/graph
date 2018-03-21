@@ -19,9 +19,6 @@ class Link(frozenset):
     def __repr__(self):
         return '(%r, %r)' % (self.a, self.b)
 
-    def _render_link(self):
-        return '    %s -- %s;' % (_dot_escape(self.a), _dot_escape(self.b))
-
 
 class LinksView(collections.abc.MutableSet):
     def __init__(self, graph):
@@ -204,7 +201,9 @@ class Graph(collections.abc.MutableSet):
             return '%s()' % (self.__class__.__name__)
         if not self._links:
             return '%s(%r)' % (self.__class__.__name__, self._nodes)
-        return '%s(%r, %r)' % (self.__class__.__name__, self._nodes, self._links)
+        return '%s(%r, %r)' % (self.__class__.__name__, \
+                               self._nodes,
+                               self._links)
 
     def add(self, node):
         self._nodes.add(node)
@@ -256,41 +255,79 @@ class Graph(collections.abc.MutableSet):
             graph.add_link(Link(mapping[left], mapping[right]))
         return graph
 
-    def render_dot(self, graph_name=None):
+    def render_graph(self, **kwargs):
         lines = []
-
-        if graph_name is None:
-            lines.append('graph {')
-        else:
-            lines.append('graph %s {' % _dot_escape(graph_name))
-
-        lines.append('    overlap = prism;')
-
-        for node in self._nodes:
-            lines.append('    %s;' % _dot_node(node))
-
-        for link in self._links:
-            lines.append(link._render_link())
-
+        name =_dot_escape(kwargs.get('graph_name') or '')
+        lines.append('graph ' + name + ' {')
+        lines.append(_dot_style(kwargs.get('graph_style'), ';\n'))
+        lines += self._render_nodes(**kwargs)
+        lines += self._render_links(**kwargs)
         lines.append('}')
         lines.append('')
-
         return '\n'.join(lines)
 
-    def save_dot(self, file, graph_name=None):
+    def _render_nodes(self, layers=[], groups={}, group_styles={}, **kwargs):
+        lines = []
+        seen = set()
+
+        for layer in layers:
+            lines.append('{')
+            lines.append('rank=same;')
+            for node in layer:
+                if node in seen:
+                    raise ValueError('subgraphs must be disjoint')
+                seen.add(node)
+                lines.append(self._render_node(node))
+            lines.append('}')
+
+        for name, nodes in groups.items():
+            lines.append('{')
+            lines.append(_dot_style(group_styles.get(name), ';\n'))
+            for node in nodes:
+                if node in seen:
+                    raise ValueError('subgraphs must be disjoint')
+                seen.add(node)
+                lines.append(self._render_node(node))
+            lines.append('}')
+
+        for node in self:
+            if node in seen:
+                continue
+            lines.append(self._render_node(node))
+
+        return lines
+
+
+    def _render_links(self, **kwargs):
+        lines = []
+        for link in self.links:
+            lines.append(self._render_link(link, **kwargs))
+        return lines
+
+    def _render_node(self, node, node_styles={}, **kwargs):
+        return '%s [%s];' % (_dot_escape(node), \
+                             _dot_style(node_styles.get(node), ', '))
+
+    def _render_link(self, link, link_styles={}, **kwargs):
+        return '%s -- %s [%s];' % (_dot_escape(link.a), _dot_escape(link.b), \
+                                   _dot_style(link_styles.get(link), ', '))
+
+    def save_dot(self, file, **kwargs):
         do_close = False
         if isinstance(file, str):
             file = open(file, 'w')
             do_close = True
-        file.write(self.render_dot(graph_name).encode('utf8'))
+        file.write(self.render_graph(**kwargs).encode('utf8'))
         file.flush()
         if do_close:
             file.close()
 
-    def display(self, dot_exec='neato', dot_args=['-Tx11']):
-        dot = subprocess.Popen([dot_exec] + dot_args, stdin=subprocess.PIPE)
-        dot.stdin.write(self.render_dot().encode('utf8'))
-        dot.stdin.close()
+    def display(self, **kwargs):
+        graphviz_args = list(kwargs.get('graphviz_args', ['-Tx11']))
+        graphviz_args.insert(0, kwargs.get('graphviz_exec', 'neato'))
+        sub = subprocess.Popen(graphviz_args, stdin=subprocess.PIPE)
+        sub.stdin.write(self.render_graph(**kwargs).encode('utf8'))
+        sub.stdin.close()
 
 
 def _discard_and_del(mapping, key, elem):
@@ -300,16 +337,22 @@ def _discard_and_del(mapping, key, elem):
         mapping.pop(key, None)
 
 
-def _dot_node(node):
-    if hasattr(node, '_dot_node'):
-        return node._dot_node()
-    return _dot_escape(node)
+def _dot_style(style, delimiter):
+    if not style:
+        return ''
+    if isinstance(style, str):
+        return style
+    clauses = []
+    for key, value in style.items():
+        clauses.append(_dot_escape(key) + '=' + _dot_escape(value) + delimiter)
+    return ''.join(clauses)
 
 
 def _dot_escape(string):
-    if hasattr(string, '_dot_repr'):
-        return string._dot_repr()
-    return '"%s"' % str(string).replace('\\', '\\\\').replace('"', '\\"')
+    if hasattr(string, '_dot_escape'):
+        return string._dot_escape()
+    string = str(string)
+    return '"' + string.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
 
 def complete_graph(n):
@@ -346,18 +389,20 @@ def erdos_renyi(n, *, m=None, p=0.5, random=_random):
 def minimum_spanning_subgraph(graph, start):
     if start not in graph:
         return Graph()
-    forrest = Graph((start,))
+    layers = []
+    subgraph = Graph((start,))
     seen = set()
     level = None
     next_level = {start}
     while next_level:
         level, next_level = next_level, set()
         seen |= level
+        layers.append(level)
         for parent in level:
             for child in graph.neighborhood(parent):
                 if child in seen:
                     continue
-                forrest.add(child)
-                forrest.add_link(Link(parent, child))
+                subgraph.add(child)
+                subgraph.add_link(Link(parent, child))
                 next_level.add(child)
-    return forrest
+    return subgraph, layers
