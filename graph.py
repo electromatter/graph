@@ -5,12 +5,18 @@ import subprocess
 import random as _random
 
 
+# pylint: disable=protected-access
+
+
 class Link(frozenset):
     'An undirected link'
 
     def __init__(self, *args):
+        if len(args) == 1:
+            self.left, self.right = args[0]
+        else:
+            self.left, self.right = args
         super().__init__()
-        self.left, self.right = tuple(self)
 
     def __new__(cls, *args):
         if len(args) == 1:
@@ -20,6 +26,9 @@ class Link(frozenset):
         if len(pair) != 2:
             raise TypeError('Link expected two arguments or a pair')
         return super().__new__(cls, pair)
+
+    def __iter__(self):
+        return iter((self.left, self.right))
 
     def __repr__(self):
         return '(%r, %r)' % (self.left, self.right)
@@ -260,7 +269,7 @@ class Graph(collections.abc.MutableSet):
         self._neighborhoods[link.right].discard(link.left)
         self._links.discard(link)
 
-    def link_set(self, node):
+    def node_links(self, node):
         'Get the links of a particular node'
         return NodeLinksView(self, node)
 
@@ -285,65 +294,37 @@ class Graph(collections.abc.MutableSet):
             graph.add_link(Link(mapping[left], mapping[right]))
         return graph
 
+    def minimal_spanning(self, node):
+        'Compute the minimal spanning subgraph starting at node'
+        return MinimumSpanningSubgraph(self, node)
+
     def render_graph(self, **kwargs):
         'Render the graph into the graphviz language'
         lines = []
         name = _dot_escape(kwargs.get('graph_name') or '')
         lines.append('graph ' + name + ' {')
         lines.append(_dot_style(kwargs.get('graph_style'), ';\n'))
-        lines += self._render_nodes(**kwargs)
-        lines += self._render_links(**kwargs)
+        lines += self.render_nodes_and_links(**kwargs)
         lines.append('}')
         lines.append('')
         return '\n'.join(lines)
 
-    def _render_nodes(self, **kwargs):
+    def render_nodes_and_links(self, **kwargs):
         'Render all nodes and return a list of lines'
         lines = []
-        seen = set()
-
-        for layer in kwargs.get('layers', []):
-            lines.append('{')
-            lines.append('rank=same;')
-            for node in layer:
-                if node in seen:
-                    raise ValueError('subgraphs must be disjoint')
-                seen.add(node)
-                lines.append(self._render_node(node, **kwargs))
-            lines.append('}')
-
-        group_styles = kwargs.get('group_styles', {})
-        for name, nodes in kwargs.get('groups', {}).items():
-            lines.append('{')
-            lines.append(_dot_style(group_styles.get(name), ';\n'))
-            for node in nodes:
-                if node in seen:
-                    raise ValueError('subgraphs must be disjoint')
-                seen.add(node)
-                lines.append(self._render_node(node, **kwargs))
-            lines.append('}')
-
         for node in self:
-            if node in seen:
-                continue
-            lines.append(self._render_node(node, **kwargs))
-
-        return lines
-
-    def _render_links(self, **kwargs):
-        'Render all links and return a list of lines'
-        lines = []
+            lines.append(self.render_node(node, **kwargs))
         for link in self.links:
-            lines.append(self._render_link(link, **kwargs))
+            lines.append(self.render_link(link, **kwargs))
         return lines
 
-    def _render_node(self, node, **kwargs):
+    def render_node(self, node, **kwargs): # pylint: disable=no-self-use
         'Render a node in the graphviz format'
         node_styles = kwargs.get('node_styles', {})
         return '%s [%s];' % (_dot_escape(node),
                              _dot_style(node_styles.get(node), ', '))
 
-    def _render_link(self, link, **kwargs):
+    def render_link(self, link, **kwargs): # pylint: disable=no-self-use
         'Render a link in the graphviz format'
         link_styles = kwargs.get('link_styles', {})
         return '%s -- %s [%s];' % (_dot_escape(link.left),
@@ -428,7 +409,7 @@ def erdos_renyi(nodes, *, links=None, link_chance=0.5, random=_random.random):
     return graph
 
 
-class MinimumSpanningSubGraph(Graph):
+class MinimumSpanningSubgraph(Graph):
     'The minimum spanning subgraph rooted at the start node'
 
     def __init__(self, graph, start):
@@ -450,13 +431,34 @@ class MinimumSpanningSubGraph(Graph):
 
     def render_graph(self, **kwargs):
         kwargs.setdefault('graphviz_exec', 'dot')
-        kwargs.setdefault('graph_style', {}) \
-              .setdefault('rankdir', 'TB')
+        graph_style = kwargs.setdefault('graph_style', {})
+        graph_style.setdefault('rankdir', 'TB')
+        graph_style.setdefault('newrank', 'false')
         kwargs.setdefault('node_styles', {}) \
               .setdefault(self.start, {}) \
               .setdefault('color', 'red')
         kwargs.setdefault('layers', self.layers)
         return super().render_graph(**kwargs)
+
+    def render_nodes_and_links(self, **kwargs):
+        lines = []
+        for layer in self.layers:
+            lines.append('{')
+            lines.append('rank=same;')
+            for node in layer:
+                lines.append(self.render_node(node, **kwargs))
+            lines.append('}')
+        seen = set()
+        for layer in self.layers:
+            lines.append('{')
+            for node in layer:
+                seen.add(node)
+                for child in self.neighborhood(node):
+                    if child in seen:
+                        continue
+                    lines.append(self.render_link(Link(node, child), **kwargs))
+            lines.append('}')
+        return lines
 
 
 def _minimum_spanning_subgraph(graph, start):
