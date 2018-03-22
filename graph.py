@@ -283,10 +283,10 @@ class Graph(collections.abc.MutableSet):
 
     def relabeled(self, *args, **kwargs):
         'Relabel the graph using the provided mapping'
-        graph = self.__class__()
+        graph = Graph()
         mapping = dict(*args, **kwargs)
         labels = set(mapping)
-        if labels != self or labels != set(mapping.values):
+        if labels != self or labels != set(mapping.values()):
             raise ValueError('expected a one-to-one onto label mapping')
         for node in self:
             graph.add(mapping[node])
