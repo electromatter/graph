@@ -281,10 +281,10 @@ class Graph(collections.abc.MutableSet):
         'Construct a node view object'
         return NodeView(self, node)
 
-    def relabeled(self, mapping):
+    def relabeled(self, *args, **kwargs):
         'Relabel the graph using the provided mapping'
         graph = self.__class__()
-        mapping = dict(mapping)
+        mapping = dict(*args, **kwargs)
         labels = set(mapping)
         if labels != self or labels != set(mapping.values):
             raise ValueError('expected a one-to-one onto label mapping')
@@ -293,6 +293,13 @@ class Graph(collections.abc.MutableSet):
         for left, right in self.links:
             graph.add_link(Link(mapping[left], mapping[right]))
         return graph
+
+    def shuffled(self, random=_random.random):
+        'Shuffle the graph labels'
+        keys = list(self)
+        values = list(keys)
+        _random.shuffle(values, random)
+        return self.relabeled(zip(keys, values))
 
     def minimal_spanning(self, node):
         'Compute the minimal spanning subgraph starting at node'
