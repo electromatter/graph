@@ -303,7 +303,11 @@ class Graph(collections.abc.MutableSet):
 
     def minimal_spanning(self, node):
         'Compute the minimal spanning subgraph starting at node'
-        return MinimumSpanningSubgraph(self, node)
+        return MinimalSpanningSubgraph(self, node)
+
+    def minimal_spanning_forrest(self):
+        'Compute the minimal spanning subgraph forrest'
+        return {node: self.minimal_spanning(node) for node in self}
 
     def render_graph(self, **kwargs):
         'Render the graph into the graphviz language'
@@ -416,25 +420,26 @@ def erdos_renyi(nodes, *, links=None, link_chance=0.5, random=_random.random):
     return graph
 
 
-class MinimumSpanningSubgraph(Graph):
-    'The minimum spanning subgraph rooted at the start node'
+class MinimalSpanningSubgraph(Graph):
+    'The minimal spanning subgraph rooted at the start node'
 
     def __init__(self, graph, start):
-        sub, self.layers = _minimum_spanning_subgraph(graph, start)
+        sub, layers = _minimal_spanning_subgraph(graph, start)
+        self.layers = tuple(layers)
         self.start = start
         super().__init__(sub)
 
     def add(self, value):
-        raise TypeError('Minimum spanning graphs are immutable')
+        raise TypeError('Minimal spanning graphs are immutable')
 
     def discard(self, value):
-        raise TypeError('Minimum spanning graphs are immutable')
+        raise TypeError('Minimal spanning graphs are immutable')
 
     def add_link(self, link):
-        raise TypeError('Minimum spanning graphs are immutable')
+        raise TypeError('Minimal spanning graphs are immutable')
 
     def discard_link(self, link):
-        raise TypeError('Minimum spanning graphs are immutable')
+        raise TypeError('Minimal spanning graphs are immutable')
 
     def render_graph(self, **kwargs):
         kwargs.setdefault('graphviz_exec', 'dot')
@@ -468,8 +473,8 @@ class MinimumSpanningSubgraph(Graph):
         return lines
 
 
-def _minimum_spanning_subgraph(graph, start):
-    'Compute the minimum spanning subgraph'
+def _minimal_spanning_subgraph(graph, start):
+    'Compute the minimal spanning subgraph'
     layers = []
     subgraph = Graph()
     seen = set()
