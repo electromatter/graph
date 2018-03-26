@@ -286,7 +286,7 @@ class Graph(collections.abc.MutableSet):
         graph = Graph()
         mapping = dict(*args, **kwargs)
         labels = set(mapping)
-        if labels != self or labels != set(mapping.values()):
+        if labels != self or len(labels) != len(set(mapping.values())):
             raise ValueError('expected a one-to-one onto label mapping')
         for node in self:
             graph.add(mapping[node])
